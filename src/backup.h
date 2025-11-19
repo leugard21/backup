@@ -7,6 +7,7 @@ typedef struct BackupOptions {
   const char *destination;
   const char *backup_name;
   int verbose;
+  int compress;
 } BackupOptions;
 
 int backup_run(const BackupOptions *opts);

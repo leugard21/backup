@@ -1,3 +1,4 @@
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,10 +10,11 @@
 static void print_usage(const char *prog) {
   fprintf(
       stderr,
-      "Usage: %s [-n name] [-v] [-h] <source> <destination>\n"
+      "Usage: %s [-n name] [-c] [-v] [-h] <source> <destination>\n"
       "\n"
       "Options:\n"
-      "  -n name   Custom backup directory name (default: timestamp-based)\n"
+      "  -n name   Custom backup name (base name for dir or archive)\n"
+      "  -c        Create compressed tar.gz archive instead of directory copy\n"
       "  -v        Verbose output\n"
       "  -h        Show this help message\n",
       prog);
@@ -22,11 +24,15 @@ int main(int argc, char *argv[]) {
   int opt;
   const char *custom_name = NULL;
   int verbose = 0;
+  int compress = 0;
 
-  while ((opt = getopt(argc, argv, "n:hv")) != -1) {
+  while ((opt = getopt(argc, argv, "n:cvh")) != -1) {
     switch (opt) {
     case 'n':
       custom_name = optarg;
+      break;
+    case 'c':
+      compress = 1;
       break;
     case 'v':
       verbose = 1;
@@ -68,6 +74,7 @@ int main(int argc, char *argv[]) {
       .destination = destination,
       .backup_name = backup_name,
       .verbose = verbose,
+      .compress = compress,
   };
 
   int rc = backup_run(&opts);
