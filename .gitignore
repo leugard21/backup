@@ -1,0 +1,11 @@
+backup
+*.o
+*.obj
+*.exe
+
+*.swp
+*.swo
+*~
+.DS_Store
+
+/build/
