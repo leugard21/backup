@@ -11,13 +11,19 @@ pub struct BackupConfig {
 impl BackupConfig {
     pub fn from_env() -> Result<Self, String> {
         let mut args = env::args().skip(1);
+        let first_source = args
+            .next()
+            .ok_or_else(|| "missing <source-dir> path".to_string())?;
+        Self::from_args(first_source, args)
+    }
 
-        let source = args
+    pub fn from_args<I>(first_source: String, mut args: I) -> Result<Self, String>
+    where
+        I: Iterator<Item = String>,
+    {
+        let destination = args
             .next()
-            .ok_or_else(|| "missing <source> path".to_string())?;
-        let destination: String = args
-            .next()
-            .ok_or_else(|| "missing <destination> path".to_string())?;
+            .ok_or_else(|| "missing <backup-dir> path".to_string())?;
 
         let mut threads = None;
         let mut verify = false;
@@ -43,7 +49,7 @@ impl BackupConfig {
         }
 
         Ok(Self {
-            source: PathBuf::from(source),
+            source: PathBuf::from(first_source),
             destination: PathBuf::from(destination),
             threads,
             verify,

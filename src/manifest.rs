@@ -1,10 +1,7 @@
 use crate::pipeline::HashedFile;
 use serde::Serialize;
-use std::{
-    fs::{self, File},
-    path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize)]
 struct ManifestFile {
@@ -12,11 +9,10 @@ struct ManifestFile {
     pub size: u64,
     pub sha256: String,
 }
-
 #[derive(Serialize)]
 struct BackupManifest {
     pub source: String,
-    pub destination: String,
+    pub backup_file: String,
     pub created_at: u64,
     pub files: Vec<ManifestFile>,
 }
@@ -31,12 +27,11 @@ fn hash_to_hex(hash: &[u8; 32]) -> String {
     s
 }
 
-pub fn write_manifest(
+pub fn build_manifest_json(
     source_root: &Path,
-    dest_root: &Path,
+    backup_file: &Path,
     hashed: &[HashedFile],
-    output_path: Option<&Path>,
-) -> std::io::Result<PathBuf> {
+) -> serde_json::Result<String> {
     let files: Vec<ManifestFile> = hashed
         .iter()
         .map(|h| {
@@ -61,23 +56,10 @@ pub fn write_manifest(
 
     let manifest = BackupManifest {
         source: source_root.to_string_lossy().to_string(),
-        destination: dest_root.to_string_lossy().to_string(),
+        backup_file: backup_file.to_string_lossy().to_string(),
         created_at,
         files,
     };
 
-    let path = if let Some(p) = output_path {
-        p.to_path_buf()
-    } else {
-        dest_root.join("backup-manifest.json")
-    };
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    let file = File::create(&path)?;
-    serde_json::to_writer_pretty(file, &manifest)?;
-
-    Ok(path)
+    serde_json::to_string_pretty(&manifest)
 }

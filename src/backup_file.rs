@@ -8,6 +8,7 @@ pub fn create_backup_file(
     backup_file: &Path,
     source_root: &Path,
     files: &[HashedFile],
+    manifest_json: &str,
     pb: &ProgressBar,
 ) -> io::Result<()> {
     let file = File::create(backup_file)?;
@@ -15,6 +16,11 @@ pub fn create_backup_file(
 
     writer.write_all(b"BKUP")?;
     writer.write_all(&1u32.to_le_bytes())?;
+
+    let manifest_bytes = manifest_json.as_bytes();
+    let manifest_len = manifest_bytes.len() as u64;
+    writer.write_all(&manifest_len.to_le_bytes())?;
+    writer.write_all(manifest_bytes)?;
 
     let total_bytes: u64 = files.iter().map(|h| h.entry.size).sum();
     pb.set_length(total_bytes);

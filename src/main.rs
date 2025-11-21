@@ -2,22 +2,63 @@ mod backup_file;
 mod config;
 mod fs_scan;
 mod hasher;
+mod inspect;
 mod manifest;
 mod pipeline;
+mod restore;
 mod types;
 mod validation;
 
 use indicatif::ProgressBar;
 use pipeline::hash_files_parallel;
 use rayon::ThreadPoolBuilder;
+use std::env;
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config::BackupConfig;
-use crate::manifest::write_manifest;
+use crate::manifest::build_manifest_json;
 use crate::validation::validate_paths;
 
 fn main() {
-    let config = match BackupConfig::from_env() {
+    let mut args = env::args().skip(1);
+    let Some(first) = args.next() else {
+        eprintln!("usage:");
+        eprintln!("  backup <source-dir> <backup-dir> [--threads N] [--verify]");
+        eprintln!("  backup inspect <backup-file>");
+        eprintln!("  backup restore <backup-file> <restore-dir>");
+        return;
+    };
+
+    if first == "inspect" {
+        let Some(archive) = args.next() else {
+            eprintln!("usage: backup inspect <backup-file>");
+            return;
+        };
+
+        if let Err(e) = inspect::inspect_backup(Path::new(&archive)) {
+            eprintln!("inspect failed: {e}");
+        }
+        return;
+    }
+
+    if first == "restore" {
+        let Some(archive) = args.next() else {
+            eprintln!("usage: backup restore <backup-file> <restore-dir>");
+            return;
+        };
+        let Some(dest) = args.next() else {
+            eprintln!("usage: backup restore <backup-file> <restore-dir>");
+            return;
+        };
+
+        if let Err(e) = restore::restore_backup(Path::new(&archive), Path::new(&dest)) {
+            eprintln!("restore failed: {e}");
+        }
+        return;
+    }
+
+    let config = match BackupConfig::from_args(first, args) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("usage: backup <source-dir> <backup-dir> [--threads N] [--verify]");
@@ -71,23 +112,24 @@ fn main() {
     let hashed = hash_files_parallel(&files, &pb_hash);
     println!("hashed: {} files", hashed.len());
 
-    println!("writing manifest...");
-    let manifest_path = backup_file.with_extension("manifest.json");
-    match write_manifest(
-        &paths.source_root,
-        &paths.backup_dir,
-        &hashed,
-        Some(&manifest_path),
-    ) {
-        Ok(path) => println!("manifest written to: {:?}", path),
-        Err(e) => eprintln!("failed to write manifest: {e}"),
-    }
+    println!("building manifest...");
+    let manifest_json = match build_manifest_json(&paths.source_root, &backup_file, &hashed) {
+        Ok(json) => json,
+        Err(e) => {
+            eprintln!("failed to build manifest JSON: {e}");
+            return;
+        }
+    };
 
     println!("writing backup archive...");
     let pb_backup = ProgressBar::new(0);
-    if let Err(e) =
-        backup_file::create_backup_file(&backup_file, &paths.source_root, &hashed, &pb_backup)
-    {
+    if let Err(e) = backup_file::create_backup_file(
+        &backup_file,
+        &paths.source_root,
+        &hashed,
+        &manifest_json,
+        &pb_backup,
+    ) {
         eprintln!("failed to create backup file: {e}");
         return;
     }
