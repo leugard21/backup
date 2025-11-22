@@ -9,6 +9,7 @@ mod pipeline;
 mod restore;
 mod types;
 mod validation;
+mod verify_archive;
 
 use indicatif::ProgressBar;
 use pipeline::hash_files_parallel;
@@ -26,9 +27,12 @@ fn main() {
     let mut args = env::args().skip(1);
     let Some(first) = args.next() else {
         eprintln!("usage:");
-        eprintln!("  backup <source-dir> <backup-dir> [--threads N] [--verify]");
+        eprintln!(
+            "  backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P]"
+        );
         eprintln!("  backup inspect <backup-file>");
         eprintln!("  backup restore <backup-file> <restore-dir>");
+        eprintln!("  backup verify <backup-file>");
         return;
     };
 
@@ -56,6 +60,18 @@ fn main() {
 
         if let Err(e) = restore::restore_backup(Path::new(&archive), Path::new(&dest)) {
             eprintln!("restore failed: {e}");
+        }
+        return;
+    }
+
+    if first == "verify" {
+        let Some(archive) = args.next() else {
+            eprintln!("usage: backup verify <backup-file>");
+            return;
+        };
+
+        if let Err(e) = verify_archive::verify_backup_file(Path::new(&archive)) {
+            eprintln!("verify failed: {e}");
         }
         return;
     }
@@ -122,7 +138,7 @@ fn main() {
     }
 
     println!("scanning: {:?}", paths.source_root);
-    let files = fs_scan::scan_dir(&paths.source_root, Some(&path_filter));
+    let files = fs_scan::scan_dir_with_filter(&paths.source_root, Some(&path_filter));
     println!("scanned (after filters): {} files", files.len());
 
     if files.is_empty() {
@@ -158,6 +174,9 @@ fn main() {
     println!("backup written to: {:?}", backup_file);
 
     if config.verify {
-        eprintln!("warning: --verify for .backup archives is not implemented yet and was ignored");
+        println!("verifying newly created backup...");
+        if let Err(e) = verify_archive::verify_backup_file(&backup_file) {
+            eprintln!("verify failed: {e}");
+        }
     }
 }

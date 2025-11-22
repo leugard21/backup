@@ -8,7 +8,11 @@ fn is_file(entry: &DirEntry) -> bool {
     entry.file_type().is_file()
 }
 
-pub fn scan_dir(root: &Path, filter: Option<&PathFilter>) -> Vec<FileEntry> {
+pub fn scan_dir(root: &Path) -> Vec<FileEntry> {
+    scan_dir_with_filter(root, None)
+}
+
+pub fn scan_dir_with_filter(root: &Path, filter: Option<&PathFilter>) -> Vec<FileEntry> {
     let mut out = Vec::new();
 
     for entry in WalkDir::new(root)
