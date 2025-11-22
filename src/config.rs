@@ -6,6 +6,8 @@ pub struct BackupConfig {
     pub destination: PathBuf,
     pub threads: Option<usize>,
     pub verify: bool,
+    pub includes: Vec<String>,
+    pub excludes: Vec<String>,
 }
 
 impl BackupConfig {
@@ -27,6 +29,8 @@ impl BackupConfig {
 
         let mut threads = None;
         let mut verify = false;
+        let mut includes = Vec::new();
+        let mut excludes = Vec::new();
 
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -42,6 +46,18 @@ impl BackupConfig {
                 "--verify" => {
                     verify = true;
                 }
+                "--include" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| "missing value for --include".to_string())?;
+                    includes.push(value);
+                }
+                "--exclude" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| "missing value for --exclude".to_string())?;
+                    excludes.push(value);
+                }
                 other => {
                     return Err(format!("unknown argument: {other}"));
                 }
@@ -53,6 +69,8 @@ impl BackupConfig {
             destination: PathBuf::from(destination),
             threads,
             verify,
+            includes,
+            excludes,
         })
     }
 }

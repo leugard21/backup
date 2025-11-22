@@ -1,7 +1,24 @@
+use indicatif::ProgressBar;
 use ring::digest;
+use serde::Deserialize;
 use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
+
+#[derive(Debug, Deserialize)]
+struct ManifestFile {
+    pub path: String,
+    pub size: u64,
+    pub sha256: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct BackupManifest {
+    pub source: String,
+    pub backup_file: String,
+    pub created_at: u64,
+    pub files: Vec<ManifestFile>,
+}
 
 pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> {
     let file = File::open(backup_file)?;
@@ -28,8 +45,20 @@ pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> 
 
     let mut len_bytes = [0u8; 8];
     reader.read_exact(&mut len_bytes)?;
-    let manifest_len = u64::from_le_bytes(len_bytes);
-    reader.seek(SeekFrom::Current(manifest_len as i64))?;
+    let manifest_len = u64::from_le_bytes(len_bytes) as usize;
+
+    let mut manifest_bytes = vec![0u8; manifest_len];
+    reader.read_exact(&mut manifest_bytes)?;
+
+    let manifest: BackupManifest = serde_json::from_slice(&manifest_bytes).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("failed to parse embedded manifest: {e}"),
+        )
+    })?;
+
+    let total_bytes: u64 = manifest.files.iter().map(|f| f.size).sum();
+    let pb = ProgressBar::new(total_bytes);
 
     if !restore_dir.exists() {
         fs::create_dir_all(restore_dir)?;
@@ -82,6 +111,7 @@ pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> 
                 eprintln!("restore: failed to create directory {:?}: {e}", parent);
                 if size > 0 {
                     let _ = reader.seek(SeekFrom::Current(size as i64));
+                    pb.inc(size);
                 }
                 failed += 1;
                 continue;
@@ -94,6 +124,7 @@ pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> 
                 eprintln!("restore: failed to create file {:?}: {e}", dest_path);
                 if size > 0 {
                     let _ = reader.seek(SeekFrom::Current(size as i64));
+                    pb.inc(size);
                 }
                 failed += 1;
                 continue;
@@ -116,6 +147,7 @@ pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> 
             out.write_all(&buf[..n])?;
             ctx.update(&buf[..n]);
             remaining -= n as u64;
+            pb.inc(n as u64);
         }
 
         out.flush()?;
@@ -131,6 +163,8 @@ pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> 
             restored += 1;
         }
     }
+
+    pb.finish_with_message("restore complete");
 
     println!(
         "restore summary: restored={} mismatched={} failed={}",

@@ -1,5 +1,6 @@
 mod backup_file;
 mod config;
+mod filter;
 mod fs_scan;
 mod hasher;
 mod inspect;
@@ -17,6 +18,7 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config::BackupConfig;
+use crate::filter::PathFilter;
 use crate::manifest::build_manifest_json;
 use crate::validation::validate_paths;
 
@@ -61,7 +63,9 @@ fn main() {
     let config = match BackupConfig::from_args(first, args) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("usage: backup <source-dir> <backup-dir> [--threads N] [--verify]");
+            eprintln!(
+                "usage: backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P]"
+            );
             eprintln!("error: {e}");
             return;
         }
@@ -77,6 +81,14 @@ fn main() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("configuration error: {e}");
+            return;
+        }
+    };
+
+    let path_filter = match PathFilter::from_patterns(&config.includes, &config.excludes) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("filter configuration error: {e}");
             return;
         }
     };
@@ -99,9 +111,19 @@ fn main() {
     println!("backup dir: {:?}", paths.backup_dir);
     println!("backup file: {:?}", backup_file);
 
+    if !config.includes.is_empty() || !config.excludes.is_empty() {
+        println!("filters:");
+        if !config.includes.is_empty() {
+            println!("  include: {:?}", config.includes);
+        }
+        if !config.excludes.is_empty() {
+            println!("  exclude: {:?}", config.excludes);
+        }
+    }
+
     println!("scanning: {:?}", paths.source_root);
-    let files = fs_scan::scan_dir(&paths.source_root);
-    println!("scanned: {} files", files.len());
+    let files = fs_scan::scan_dir(&paths.source_root, Some(&path_filter));
+    println!("scanned (after filters): {} files", files.len());
 
     if files.is_empty() {
         println!("nothing to hash or backup");
