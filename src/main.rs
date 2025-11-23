@@ -23,22 +23,47 @@ use crate::filter::PathFilter;
 use crate::manifest::build_manifest_json;
 use crate::validation::validate_paths;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn print_banner(title: &str) {
+    println!();
+    println!("==================== backup ====================");
+    println!("  {title}");
+    println!("================================================");
+}
+
+fn print_section(title: &str) {
+    println!();
+    println!("--- {title} ---");
+}
+
+fn print_kv<K: AsRef<str>, V: AsRef<str>>(k: K, v: V) {
+    println!("  {:12} {}", format!("{}:", k.as_ref()), v.as_ref());
+}
+
 fn main() {
     let mut args = env::args().skip(1);
     let Some(first) = args.next() else {
-        eprintln!("usage:");
-        eprintln!(
+        print_banner("usage");
+        println!(
             "  backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P] [--dry-run]"
         );
-        eprintln!("  backup inspect <backup-file>");
-        eprintln!("  backup restore <backup-file> <restore-dir>");
-        eprintln!("  backup verify <backup-file>");
+        println!("  backup inspect <backup-file>");
+        println!("  backup restore <backup-file> <restore-dir>");
+        println!("  backup verify  <backup-file>");
+        println!("  backup --version | -V");
         return;
     };
 
+    if first == "--version" || first == "-V" {
+        println!("backup {}", VERSION);
+        return;
+    }
+
     if first == "inspect" {
         let Some(archive) = args.next() else {
-            eprintln!("usage: backup inspect <backup-file>");
+            print_banner("inspect usage");
+            println!("  backup inspect <backup-file>");
             return;
         };
 
@@ -50,11 +75,13 @@ fn main() {
 
     if first == "restore" {
         let Some(archive) = args.next() else {
-            eprintln!("usage: backup restore <backup-file> <restore-dir>");
+            print_banner("restore usage");
+            println!("  backup restore <backup-file> <restore-dir>");
             return;
         };
         let Some(dest) = args.next() else {
-            eprintln!("usage: backup restore <backup-file> <restore-dir>");
+            print_banner("restore usage");
+            println!("  backup restore <backup-file> <restore-dir>");
             return;
         };
 
@@ -66,7 +93,8 @@ fn main() {
 
     if first == "verify" {
         let Some(archive) = args.next() else {
-            eprintln!("usage: backup verify <backup-file>");
+            print_banner("verify usage");
+            println!("  backup verify <backup-file>");
             return;
         };
 
@@ -79,13 +107,18 @@ fn main() {
     let config = match BackupConfig::from_args(first, args) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!(
-                "usage: backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P] [--dry-run]"
-            );
+            print_banner("invalid arguments");
             eprintln!("error: {e}");
+            println!();
+            println!("usage:");
+            println!(
+                "  backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P] [--dry-run]"
+            );
             return;
         }
     };
+
+    print_banner("create backup");
 
     if let Some(n) = config.threads {
         if let Err(err) = ThreadPoolBuilder::new().num_threads(n).build_global() {
@@ -96,7 +129,8 @@ fn main() {
     let paths = match validate_paths(&config) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("configuration error: {e}");
+            print_section("configuration error");
+            eprintln!("{e}");
             return;
         }
     };
@@ -104,7 +138,8 @@ fn main() {
     let path_filter = match PathFilter::from_patterns(&config.includes, &config.excludes) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("filter configuration error: {e}");
+            print_section("filter error");
+            eprintln!("{e}");
             return;
         }
     };
@@ -123,45 +158,51 @@ fn main() {
     let backup_file_name = format!("{source_name}-{ts}.backup");
     let backup_file = paths.backup_dir.join(&backup_file_name);
 
-    println!("source: {:?}", paths.source_root);
-    println!("backup dir: {:?}", paths.backup_dir);
-    println!("backup file (planned): {:?}", backup_file);
+    print_section("paths");
+    print_kv("source", &paths.source_root.to_string_lossy());
+    print_kv("backup dir", &paths.backup_dir.to_string_lossy());
+    print_kv("backup file", &backup_file.to_string_lossy());
 
     if !config.includes.is_empty() || !config.excludes.is_empty() {
-        println!("filters:");
+        print_section("filters");
         if !config.includes.is_empty() {
-            println!("  include: {:?}", config.includes);
+            print_kv("include", format!("{:?}", config.includes));
         }
         if !config.excludes.is_empty() {
-            println!("  exclude: {:?}", config.excludes);
+            print_kv("exclude", format!("{:?}", config.excludes));
         }
     }
 
-    println!("scanning: {:?}", paths.source_root);
+    if config.dry_run {
+        print_kv("mode", "dry-run");
+    }
+
+    print_section("scan");
+    print_kv("root", &paths.source_root.to_string_lossy());
     let files = fs_scan::scan_dir_with_filter(&paths.source_root, Some(&path_filter));
 
     let total_bytes: u64 = files.iter().map(|f| f.size).sum();
-    println!(
-        "scanned (after filters): {} files, {} bytes",
-        files.len(),
-        total_bytes
-    );
+    print_kv("files", files.len().to_string());
+    print_kv("bytes", total_bytes.to_string());
 
     if files.is_empty() {
+        println!();
         println!("nothing to hash or backup");
         return;
     }
 
     if config.dry_run {
-        println!("dry-run: no hashing, no archive will be written.");
+        print_section("summary");
+        println!("dry-run: no hashing, manifest, or archive written.");
         return;
     }
 
+    print_section("hash");
     let pb_hash = ProgressBar::new(files.len() as u64);
     let hashed = hash_files_parallel(&files, &pb_hash);
-    println!("hashed: {} files", hashed.len());
+    print_kv("hashed files", hashed.len().to_string());
 
-    println!("building manifest...");
+    print_section("manifest");
     let manifest_json = match build_manifest_json(&paths.source_root, &backup_file, &hashed) {
         Ok(json) => json,
         Err(e) => {
@@ -169,8 +210,9 @@ fn main() {
             return;
         }
     };
+    print_kv("entries", hashed.len().to_string());
 
-    println!("writing backup archive...");
+    print_section("archive");
     let pb_backup = ProgressBar::new(0);
     if let Err(e) = backup_file::create_backup_file(
         &backup_file,
@@ -182,12 +224,15 @@ fn main() {
         eprintln!("failed to create backup file: {e}");
         return;
     }
-    println!("backup written to: {:?}", backup_file);
+    print_kv("written", &backup_file.to_string_lossy());
 
     if config.verify {
-        println!("verifying newly created backup...");
+        print_section("verify");
         if let Err(e) = verify_archive::verify_backup_file(&backup_file) {
             eprintln!("verify failed: {e}");
         }
     }
+
+    print_section("done");
+    println!("backup completed.");
 }

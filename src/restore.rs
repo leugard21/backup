@@ -7,19 +7,29 @@ use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 struct ManifestFile {
-    pub path: String,
     pub size: u64,
 }
 
 #[derive(Debug, Deserialize)]
 struct BackupManifest {
     pub source: String,
-    pub backup_file: String,
-    pub created_at: u64,
     pub files: Vec<ManifestFile>,
 }
 
+fn print_section(title: &str) {
+    println!();
+    println!("--- {title} ---");
+}
+
+fn print_kv<K: AsRef<str>, V: AsRef<str>>(k: K, v: V) {
+    println!("  {:12} {}", format!("{}:", k.as_ref()), v.as_ref());
+}
+
 pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> {
+    println!("==================== backup restore ====================");
+    print_kv("archive", &backup_file.to_string_lossy());
+    print_kv("target", &restore_dir.to_string_lossy());
+
     let file = File::open(backup_file)?;
     let mut reader = BufReader::new(file);
 
@@ -59,6 +69,11 @@ pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> 
     let total_bytes: u64 = manifest.files.iter().map(|f| f.size).sum();
     let pb = ProgressBar::new(total_bytes);
 
+    print_section("manifest");
+    print_kv("source", &manifest.source);
+    print_kv("files", manifest.files.len().to_string());
+    print_kv("bytes", total_bytes.to_string());
+
     if !restore_dir.exists() {
         fs::create_dir_all(restore_dir)?;
     } else if !restore_dir.is_dir() {
@@ -68,6 +83,7 @@ pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> 
         ));
     }
 
+    print_section("restore");
     let mut restored = 0usize;
     let mut mismatched = 0usize;
     let mut failed = 0usize;
@@ -88,7 +104,6 @@ pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> 
             Ok(s) => s,
             Err(e) => {
                 eprintln!("restore: invalid UTF-8 path in archive: {e}");
-                failed += 1;
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "invalid UTF-8 path in archive",
@@ -165,10 +180,10 @@ pub fn restore_backup(backup_file: &Path, restore_dir: &Path) -> io::Result<()> 
 
     pb.finish_with_message("restore complete");
 
-    println!(
-        "restore summary: restored={} mismatched={} failed={}",
-        restored, mismatched, failed
-    );
+    print_section("summary");
+    print_kv("restored", restored.to_string());
+    print_kv("mismatched", mismatched.to_string());
+    print_kv("failed", failed.to_string());
 
     Ok(())
 }

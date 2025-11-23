@@ -7,19 +7,28 @@ use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 struct ManifestFile {
-    pub path: String,
     pub size: u64,
 }
 
 #[derive(Debug, Deserialize)]
 struct BackupManifest {
     pub source: String,
-    pub backup_file: String,
-    pub created_at: u64,
     pub files: Vec<ManifestFile>,
 }
 
+fn print_section(title: &str) {
+    println!();
+    println!("--- {title} ---");
+}
+
+fn print_kv<K: AsRef<str>, V: AsRef<str>>(k: K, v: V) {
+    println!("  {:12} {}", format!("{}:", k.as_ref()), v.as_ref());
+}
+
 pub fn verify_backup_file(path: &Path) -> io::Result<()> {
+    println!("==================== backup verify ====================");
+    print_kv("archive", &path.to_string_lossy());
+
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 
@@ -59,10 +68,16 @@ pub fn verify_backup_file(path: &Path) -> io::Result<()> {
     let total_bytes: u64 = manifest.files.iter().map(|f| f.size).sum();
     let pb = ProgressBar::new(total_bytes);
 
+    print_section("manifest");
+    print_kv("source", &manifest.source);
+    print_kv("files", manifest.files.len().to_string());
+    print_kv("bytes", total_bytes.to_string());
+
     let mut checked = 0usize;
     let mut ok = 0usize;
     let mut mismatched = 0usize;
 
+    print_section("verify");
     loop {
         let mut len_buf = [0u8; 2];
         match reader.read_exact(&mut len_buf) {
@@ -130,10 +145,10 @@ pub fn verify_backup_file(path: &Path) -> io::Result<()> {
         );
     }
 
-    println!(
-        "verify summary: checked={} ok={} mismatched={}",
-        checked, ok, mismatched
-    );
+    print_section("summary");
+    print_kv("checked", checked.to_string());
+    print_kv("ok", ok.to_string());
+    print_kv("mismatched", mismatched.to_string());
 
     Ok(())
 }

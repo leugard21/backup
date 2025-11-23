@@ -1,1 +1,11 @@
 /target
+**/*.rs.bk
+*.swp
+.DS_Store
+.vscode/
+.idea/
+.debhelper
+backup
+backup.substvars
+debhelper-build-stamp
+files

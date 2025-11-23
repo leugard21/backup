@@ -125,6 +125,7 @@ Each file entry contains:
 src/
 ├── main.rs          # CLI entry point and command routing
 ├── config.rs        # Configuration parsing
+├── copy.rs          # File copying utilities
 ├── fs_scan.rs       # Directory scanning
 ├── hasher.rs        # SHA-256 file hashing
 ├── pipeline.rs      # Parallel hashing pipeline

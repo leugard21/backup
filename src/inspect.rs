@@ -7,7 +7,6 @@ use std::path::Path;
 struct ManifestFile {
     pub path: String,
     pub size: u64,
-    pub sha256: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -16,6 +15,15 @@ struct BackupManifest {
     pub backup_file: String,
     pub created_at: u64,
     pub files: Vec<ManifestFile>,
+}
+
+fn print_section(title: &str) {
+    println!();
+    println!("--- {title} ---");
+}
+
+fn print_kv<K: AsRef<str>, V: AsRef<str>>(k: K, v: V) {
+    println!("  {:12} {}", format!("{}:", k.as_ref()), v.as_ref());
 }
 
 pub fn inspect_backup(path: &Path) -> io::Result<()> {
@@ -58,19 +66,25 @@ pub fn inspect_backup(path: &Path) -> io::Result<()> {
     let total_files = manifest.files.len();
     let total_bytes: u64 = manifest.files.iter().map(|f| f.size).sum();
 
-    println!("backup info:");
-    println!("  source     : {}", manifest.source);
-    println!("  backup_file: {}", manifest.backup_file);
-    println!("  created_at : {} (unix seconds)", manifest.created_at);
-    println!("  files      : {}", total_files);
-    println!("  total size : {} bytes", total_bytes);
+    println!("==================== backup inspect ====================");
+    print_kv("archive", &path.to_string_lossy());
 
-    println!("  sample files:");
+    print_section("info");
+    print_kv("source", &manifest.source);
+    print_kv("backup file", &manifest.backup_file);
+    print_kv(
+        "created_at",
+        format!("{} (unix seconds)", manifest.created_at),
+    );
+    print_kv("files", total_files.to_string());
+    print_kv("total bytes", total_bytes.to_string());
+
+    print_section("sample files");
     for f in manifest.files.iter().take(10) {
-        println!("    {} ({} bytes)", f.path, f.size);
+        println!("  - {} ({} bytes)", f.path, f.size);
     }
     if total_files > 10 {
-        println!("    ... ({} more files)", total_files - 10);
+        println!("  ... ({} more files)", total_files - 10);
     }
 
     Ok(())

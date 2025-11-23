@@ -1,0 +1,13 @@
+Source: backup
+Section: utils
+Priority: optional
+Maintainer: Islahul Kafa
+Build-Depends: debhelper-compat (= 13), cargo, rustc
+Standards-Version: 4.7.0
+Homepage: https://github.com/leugard21/backup
+
+Package: backup
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Multi-threaded system backup utility
+ Backup tool using Rust.
