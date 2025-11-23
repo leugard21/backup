@@ -9,7 +9,6 @@ use std::path::Path;
 struct ManifestFile {
     pub path: String,
     pub size: u64,
-    pub sha256: String,
 }
 
 #[derive(Debug, Deserialize)]

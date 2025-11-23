@@ -28,7 +28,7 @@ fn main() {
     let Some(first) = args.next() else {
         eprintln!("usage:");
         eprintln!(
-            "  backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P]"
+            "  backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P] [--dry-run]"
         );
         eprintln!("  backup inspect <backup-file>");
         eprintln!("  backup restore <backup-file> <restore-dir>");
@@ -80,7 +80,7 @@ fn main() {
         Ok(c) => c,
         Err(e) => {
             eprintln!(
-                "usage: backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P]"
+                "usage: backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P] [--dry-run]"
             );
             eprintln!("error: {e}");
             return;
@@ -125,7 +125,7 @@ fn main() {
 
     println!("source: {:?}", paths.source_root);
     println!("backup dir: {:?}", paths.backup_dir);
-    println!("backup file: {:?}", backup_file);
+    println!("backup file (planned): {:?}", backup_file);
 
     if !config.includes.is_empty() || !config.excludes.is_empty() {
         println!("filters:");
@@ -139,10 +139,21 @@ fn main() {
 
     println!("scanning: {:?}", paths.source_root);
     let files = fs_scan::scan_dir_with_filter(&paths.source_root, Some(&path_filter));
-    println!("scanned (after filters): {} files", files.len());
+
+    let total_bytes: u64 = files.iter().map(|f| f.size).sum();
+    println!(
+        "scanned (after filters): {} files, {} bytes",
+        files.len(),
+        total_bytes
+    );
 
     if files.is_empty() {
         println!("nothing to hash or backup");
+        return;
+    }
+
+    if config.dry_run {
+        println!("dry-run: no hashing, no archive will be written.");
         return;
     }
 

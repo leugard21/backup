@@ -1,15 +1,10 @@
+use crate::filter::PathFilter;
 use crate::types::FileEntry;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::filter::PathFilter;
-
 fn is_file(entry: &DirEntry) -> bool {
     entry.file_type().is_file()
-}
-
-pub fn scan_dir(root: &Path) -> Vec<FileEntry> {
-    scan_dir_with_filter(root, None)
 }
 
 pub fn scan_dir_with_filter(root: &Path, filter: Option<&PathFilter>) -> Vec<FileEntry> {

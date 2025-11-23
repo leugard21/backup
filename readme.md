@@ -10,6 +10,8 @@ A fast, parallel file backup utility written in Rust that creates single-file ar
 - **Progress Tracking**: Visual progress bars for hashing and backup operations
 - **Restore with Verification**: Automatically verifies file integrity when restoring from backups
 - **Inspect Archives**: View backup metadata and file listings without extracting
+- **Standalone Verification**: Verify the integrity of a backup archive without restoring
+- **Filtering**: Support for including and excluding files using glob patterns
 
 ## Installation
 
@@ -26,18 +28,20 @@ The binary will be available at `target/release/backup`.
 ### Create a Backup
 
 ```bash
-backup <source-dir> <backup-dir> [--threads N] [--verify]
+backup <source-dir> <backup-dir> [--threads N] [--verify] [--include P] [--exclude P]
 ```
 
 **Arguments:**
 - `<source-dir>`: Directory to back up
 - `<backup-dir>`: Directory where the `.backup` file will be created
 - `--threads N` or `-j N`: Number of threads to use for parallel processing (optional)
-- `--verify`: Enable verification after backup (optional, not yet implemented)
+- `--verify`: Enable verification immediately after backup creation (optional)
+- `--include P`: Glob pattern to include files (can be used multiple times)
+- `--exclude P`: Glob pattern to exclude files (can be used multiple times)
 
 **Example:**
 ```bash
-backup /home/user/documents /mnt/backups --threads 8
+backup /home/user/documents /mnt/backups --threads 8 --exclude "*.tmp" --verify
 ```
 
 This creates a timestamped backup file like `documents-1700000000.backup` in `/mnt/backups/`.
@@ -72,6 +76,19 @@ backup inspect /mnt/backups/documents-1700000000.backup
 
 Displays backup metadata including file count, total size, and file listings.
 
+### Verify a Backup
+
+```bash
+backup verify <backup-file>
+```
+
+**Example:**
+```bash
+backup verify /mnt/backups/documents-1700000000.backup
+```
+
+Verifies the integrity of the backup archive by checking the internal structure and hashes.
+
 ## Backup File Format
 
 The `.backup` file format is a custom binary format:
@@ -100,6 +117,7 @@ Each file entry contains:
 - **walkdir**: Directory traversal
 - **indicatif**: Progress bars
 - **serde** & **serde_json**: Manifest serialization
+- **globset**: Glob pattern matching for filters
 
 ## Project Structure
 
@@ -114,7 +132,9 @@ src/
 ├── backup_file.rs   # Archive creation
 ├── restore.rs       # Archive extraction and verification
 ├── inspect.rs       # Archive inspection
+├── verify_archive.rs # Archive verification
 ├── types.rs         # Common types
+├── filter.rs        # Path filtering logic
 └── validation.rs    # Path validation
 ```
 
@@ -128,7 +148,6 @@ The backup utility is designed for speed:
 ## Limitations
 
 - Maximum path length: 65,535 bytes (u16::MAX)
-- The `--verify` flag for post-backup verification is not yet implemented
 - Archive format version is currently fixed at v1
 
 ## License

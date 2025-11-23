@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct BackupConfig {
@@ -8,17 +8,10 @@ pub struct BackupConfig {
     pub verify: bool,
     pub includes: Vec<String>,
     pub excludes: Vec<String>,
+    pub dry_run: bool,
 }
 
 impl BackupConfig {
-    pub fn from_env() -> Result<Self, String> {
-        let mut args = env::args().skip(1);
-        let first_source = args
-            .next()
-            .ok_or_else(|| "missing <source-dir> path".to_string())?;
-        Self::from_args(first_source, args)
-    }
-
     pub fn from_args<I>(first_source: String, mut args: I) -> Result<Self, String>
     where
         I: Iterator<Item = String>,
@@ -31,6 +24,7 @@ impl BackupConfig {
         let mut verify = false;
         let mut includes = Vec::new();
         let mut excludes = Vec::new();
+        let mut dry_run = false;
 
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -38,26 +32,26 @@ impl BackupConfig {
                     let value = args
                         .next()
                         .ok_or_else(|| "missing value for --threads".to_string())?;
-                    let parsed: usize = value
-                        .parse()
-                        .map_err(|_| "invalid value for --threads".to_string())?;
-                    threads = Some(parsed);
+                    threads = Some(
+                        value
+                            .parse()
+                            .map_err(|_| "invalid value for --threads".to_string())?,
+                    );
                 }
-                "--verify" => {
-                    verify = true;
-                }
+                "--verify" => verify = true,
                 "--include" => {
-                    let value = args
+                    let v = args
                         .next()
                         .ok_or_else(|| "missing value for --include".to_string())?;
-                    includes.push(value);
+                    includes.push(v);
                 }
                 "--exclude" => {
-                    let value = args
+                    let v = args
                         .next()
                         .ok_or_else(|| "missing value for --exclude".to_string())?;
-                    excludes.push(value);
+                    excludes.push(v);
                 }
+                "--dry-run" => dry_run = true,
                 other => {
                     return Err(format!("unknown argument: {other}"));
                 }
@@ -71,6 +65,7 @@ impl BackupConfig {
             verify,
             includes,
             excludes,
+            dry_run,
         })
     }
 }
